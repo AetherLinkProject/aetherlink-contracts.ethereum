@@ -1,0 +1,13 @@
+{
+    "contractsDir": "contracts-dbg",
+    "selectedContract": "RampTest",
+    "autoOpen": true,
+    "breakOnEntry": false,
+    "symbols": {
+        "hardhat": {
+            "projectPaths": [
+                "/Users/tangchen/Project/AetherLink.Ethereum.Contracts"
+            ]
+        }
+    }
+}
