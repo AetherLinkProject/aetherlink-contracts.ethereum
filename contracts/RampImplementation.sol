@@ -46,10 +46,7 @@ contract RampImplementation is ProxyStorage {
         uint256 sourceChainId,
         uint256 targetChainId,
         bytes message,
-        // for tokenAmount
-        string targetContractAddress,
-        string tokenAddress,
-        uint256 amount
+        bytes tokenTransferMetadataBytes
     );
 
     event ForwardMessageCalled(
@@ -87,20 +84,19 @@ contract RampImplementation is ProxyStorage {
         uint256 targetChainId,
         string calldata receiver,
         bytes calldata message,
-        IRamp.TokenAmount calldata tokenAmount
+        IRamp.TokenTransferMetadata calldata tokenTransferMetadata
     ) external returns (bytes32 messageId) {
-        require(tokenAmount.amount > 0, "Invalid token amount");
-
         messageId = keccak256(
             abi.encode(
                 msg.sender,
                 targetChainId,
                 receiver,
                 message,
-                tokenAmount,
+                tokenTransferMetadata,
                 block.timestamp
             )
         );
+       bytes tokenTransferMetadataBytes = ;
 
         emit RequestSent(
             messageId,
@@ -110,9 +106,10 @@ contract RampImplementation is ProxyStorage {
             block.chainid,
             targetChainId,
             message,
-            tokenAmount.targetContractAddress,
-            tokenAmount.tokenAddress,
-            tokenAmount.amount
+            tokenTransferMetadataBytes
+            // tokenAmount.targetContractAddress,
+            // tokenAmount.tokenAddress,
+            // tokenAmount.amount
         );
 
         epoch += 1;
@@ -121,7 +118,7 @@ contract RampImplementation is ProxyStorage {
     function transmit(
         bytes calldata reportContextDecoded,
         bytes calldata message,
-        bytes calldata tokenAmountDecoded,
+        bytes calldata tokenTransferMetadataDecoded,
         bytes32[] memory rs,
         bytes32[] memory ss,
         bytes32 rawVs
@@ -134,8 +131,8 @@ contract RampImplementation is ProxyStorage {
         ReportContext memory reportContext = decodeReportContext(
             reportContextDecoded
         );
-        IRamp.TokenAmount memory tokenAmount = decodeTokenAmount(
-            tokenAmountDecoded
+        IRamp.TokenTransferMetadata memory tokenTransferMetadata = decodeTokenTransferMetadata(
+            tokenTransferMetadataDecoded
         );
 
         require(reportContext.targetChainId > 0, "Invalid targetChainId.");
@@ -145,7 +142,7 @@ contract RampImplementation is ProxyStorage {
         );
 
         bytes32 reportHash = keccak256(
-            abi.encode(reportContextDecoded, message, tokenAmountDecoded)
+            abi.encode(reportContextDecoded, message, tokenTransferMetadataDecoded)
         );
         require(
             _validateSignatures(reportHash, rs, ss, rawVs),
@@ -158,7 +155,7 @@ contract RampImplementation is ProxyStorage {
             reportContext.sender,
             reportContext.receiver,
             message,
-            tokenAmount
+            tokenTransferMetadata
         );
 
         emit ForwardMessageCalled(
@@ -171,10 +168,9 @@ contract RampImplementation is ProxyStorage {
         );
     }
 
-    function decodeTokenAmount(
-        bytes calldata tokenAmountBytes
-    ) internal returns (IRamp.TokenAmount memory) {
-        // Decode the ABI-encoded data into the TokenAmount struct
+    function decodeTokenTransferMetadata(
+        bytes calldata tokenTransferMetadataBytes
+    ) internal returns (IRamp.TokenTransferMetadata memory) {
         (
             string memory swapId,
             uint256 targetChainId,
@@ -183,12 +179,12 @@ contract RampImplementation is ProxyStorage {
             string memory originToken,
             uint256 amount
         ) = abi.decode(
-                tokenAmountBytes,
+                tokenTransferMetadataBytes,
                 (string, uint256, string, string, string, uint256)
             );
 
         return
-            IRamp.TokenAmount({
+            IRamp.TokenTransferMetadata({
                 swapId: swapId,
                 targetChainId: targetChainId,
                 targetContractAddress: targetContractAddress,
@@ -298,9 +294,9 @@ contract RampImplementation is ProxyStorage {
     // function debugReportHash(
     //     ReportContext memory reportContext,
     //     string memory message,
-    //     TokenAmount memory tokenAmount
+    //     TokenTransferMetadata memory tokenTransferMetadata
     // ) public pure returns (bytes32) {
-    //     return keccak256(abi.encode(reportContext, message, tokenAmount));
+    //     return keccak256(abi.encode(reportContext, message, tokenTransferMetadata));
     // }
 
     // function debugRequestId(bytes32 requestId) public pure returns (bytes32) {

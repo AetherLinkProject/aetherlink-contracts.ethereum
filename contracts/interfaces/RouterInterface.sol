@@ -8,6 +8,6 @@ interface IRouter {
         string memory sender,
         address receiver,
         bytes memory message,
-        IRamp.TokenAmount memory tokenAmount
+        IRamp.TokenTransferMetadata memory tokenTransferMetadata
     ) external;
 }

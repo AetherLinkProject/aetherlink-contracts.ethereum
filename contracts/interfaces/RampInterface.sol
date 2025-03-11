@@ -2,13 +2,15 @@
 pragma solidity ^0.8.0;
 
 interface IRamp {
-    struct TokenAmount {
+    struct TokenTransferMetadata {
+        // TODO change struct name
         string swapId;
         uint256 targetChainId;
         string targetContractAddress;
         string tokenAddress;
-        string originToken;
+        string originToken; // symbol
         uint256 amount;
+        // TODO add extra data
     }
 
     struct Request {
@@ -17,13 +19,13 @@ interface IRamp {
         address receiver;
         uint256 targetChainId;
         bytes data;
-        TokenAmount tokenAmount;
+        TokenTransferMetadata tokenTransferMetadata;
         uint256 timestamp;
         bool fulfilled;
     }
 
     event ForwardMessageCalled(
-        TokenAmount tokenAmount,
+        TokenTransferMetadata tokenTransferMetadata,
         string message,
         uint256 sourceChainId,
         string sender,
@@ -34,6 +36,6 @@ interface IRamp {
         uint256 targetChainId,
         string calldata receiver,
         bytes calldata data,
-        TokenAmount calldata tokenAmount
+        TokenTransferMetadata calldata tokenTransferMetadata
     ) external returns (bytes32 messageId);
 }
