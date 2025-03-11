@@ -16,6 +16,6 @@ contract MockRouter is IRouter {
         string calldata sender,
         address receiver,
         bytes calldata message,
-        IRamp.TokenAmount calldata tokenAmount
+        IRamp.TokenTransferMetadata calldata tokenTransferMetadata
     ) external override {}
 }

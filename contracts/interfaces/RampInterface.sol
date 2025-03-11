@@ -4,12 +4,11 @@ pragma solidity ^0.8.0;
 interface IRamp {
     struct TokenTransferMetadata {
         // TODO change struct name
-        string swapId;
         uint256 targetChainId;
-        string targetContractAddress;
         string tokenAddress;
-        string originToken; // symbol
+        string symbol;
         uint256 amount;
+        bytes extraData;
         // TODO add extra data
     }
 

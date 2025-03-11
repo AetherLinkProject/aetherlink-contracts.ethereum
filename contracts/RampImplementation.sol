@@ -96,7 +96,9 @@ contract RampImplementation is ProxyStorage {
                 block.timestamp
             )
         );
-       bytes tokenTransferMetadataBytes = ;
+        bytes memory tokenTransferMetadataBytes = abi.encode(
+            tokenTransferMetadata
+        );
 
         emit RequestSent(
             messageId,
@@ -107,9 +109,6 @@ contract RampImplementation is ProxyStorage {
             targetChainId,
             message,
             tokenTransferMetadataBytes
-            // tokenAmount.targetContractAddress,
-            // tokenAmount.tokenAddress,
-            // tokenAmount.amount
         );
 
         epoch += 1;
@@ -131,9 +130,10 @@ contract RampImplementation is ProxyStorage {
         ReportContext memory reportContext = decodeReportContext(
             reportContextDecoded
         );
-        IRamp.TokenTransferMetadata memory tokenTransferMetadata = decodeTokenTransferMetadata(
-            tokenTransferMetadataDecoded
-        );
+        IRamp.TokenTransferMetadata
+            memory tokenTransferMetadata = decodeTokenTransferMetadata(
+                tokenTransferMetadataDecoded
+            );
 
         require(reportContext.targetChainId > 0, "Invalid targetChainId.");
         require(
@@ -142,7 +142,11 @@ contract RampImplementation is ProxyStorage {
         );
 
         bytes32 reportHash = keccak256(
-            abi.encode(reportContextDecoded, message, tokenTransferMetadataDecoded)
+            abi.encode(
+                reportContextDecoded,
+                message,
+                tokenTransferMetadataDecoded
+            )
         );
         require(
             _validateSignatures(reportHash, rs, ss, rawVs),
@@ -172,25 +176,23 @@ contract RampImplementation is ProxyStorage {
         bytes calldata tokenTransferMetadataBytes
     ) internal returns (IRamp.TokenTransferMetadata memory) {
         (
-            string memory swapId,
             uint256 targetChainId,
-            string memory targetContractAddress,
             string memory tokenAddress,
-            string memory originToken,
-            uint256 amount
+            string memory symbol,
+            uint256 amount,
+            bytes memory extraData
         ) = abi.decode(
                 tokenTransferMetadataBytes,
-                (string, uint256, string, string, string, uint256)
+                (uint256, string, string, uint256, bytes)
             );
 
         return
             IRamp.TokenTransferMetadata({
-                swapId: swapId,
                 targetChainId: targetChainId,
-                targetContractAddress: targetContractAddress,
                 tokenAddress: tokenAddress,
-                originToken: originToken,
-                amount: amount
+                symbol: symbol,
+                amount: amount,
+                extraData: extraData
             });
     }
 

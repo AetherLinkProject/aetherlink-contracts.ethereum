@@ -51,7 +51,6 @@ describe("Ramp", function () {
             it("should initialize oracle nodes correctly", async () => {
                 const { ramp, addr1, addr2 } = await loadFixture(deployRampFixture);
                 const oracleNodes = await ramp.getOracleNodes();
-                // console.log(`oracleNodes: ${oracleNodes}`)
                 expect(oracleNodes.length).to.equal(3);
                 expect(oracleNodes).to.include(addr1.address);
                 expect(oracleNodes).to.include(addr2.address);
@@ -68,6 +67,7 @@ describe("Ramp", function () {
     describe("SendRequest", () => {
         it("should emit RequestSent event and compute correct messageId on valid inputs", async () => {
             const { ramp, addr1, mockRouter } = await loadFixture(deployRampFixture);
+            const sourceChainId = 31337;
             const targetChainId = 2;
             const receiver = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
             const message = "Hello Receiver";
@@ -76,13 +76,19 @@ describe("Ramp", function () {
             // const currentTimestamp = block.timestamp;
             // const expectedMessageId = generateMessageId(addr1.address, targetChainId, receiver, message, tokenAmount, currentTimestamp);
             // const tokenAmountBytes = encodeTokenAmount(tokenAmount);
+            // const tokenTransferMetadataBytes = ethers.utils.defaultAbiCoder.decode(
+            //     ["address", "uint256", "string"],
+            //     tokenTransferMetadataBytes
+            // );
             const tx = await ramp.connect(addr1).sendRequest(targetChainId, mockRouter.address, ethers.utils.toUtf8Bytes(message), tokenAmount);
             await expect(tx)
                 .to.emit(ramp, "RequestSent")
                 .withArgs(
                     anyValue,
+                    0,
                     addr1.address,
                     receiver,
+                    sourceChainId,
                     targetChainId,
                     ethers.utils.toUtf8Bytes(message),
                     anyValue
@@ -107,20 +113,18 @@ describe("Ramp", function () {
                 ]
             );
 
-
             const message = ethers.utils.toUtf8Bytes("Valid Message");
             const tokenAmount = getValidTokenAmount();
             const tokenAmountEncoded = ethers.utils.defaultAbiCoder.encode(
                 [
-                    "string", "uint256", "string", "string", "string", "uint256"
+                    "uint256", "string", "string", "uint256", "bytes"
                 ],
                 [
-                    tokenAmount.swapId,
                     tokenAmount.targetChainId,
-                    tokenAmount.targetContractAddress,
                     tokenAmount.tokenAddress,
-                    tokenAmount.originToken,
-                    tokenAmount.amount
+                    tokenAmount.symbol,
+                    tokenAmount.amount,
+                    tokenAmount.extraData,
                 ]
             );
 
@@ -135,24 +139,16 @@ describe("Ramp", function () {
             await expect(tx).to.emit(ramp, "ForwardMessageCalled")
                 .withArgs(
                     reportContext.messageId,
-                    message,
-                    [
-                        tokenAmount.swapId,
-                        tokenAmount.targetChainId,
-                        tokenAmount.targetContractAddress,
-                        tokenAmount.tokenAddress,
-                        tokenAmount.originToken,
-                        tokenAmount.amount
-                    ],
                     reportContext.sourceChainId,
+                    reportContext.targetChainId,
                     reportContext.sender,
-                    reportContext.receiver
+                    reportContext.receiver,
+                    message,
                 );
         });
 
         it("should fail if insufficient valid signatures are provided", async function () {
             const { ramp, addr1, mockRouter, wallet1 } = await loadFixture(deployRampFixture);
-
             const reportContext = getValidReportContext(mockRouter);
             const reportContextEncoded = ethers.utils.defaultAbiCoder.encode(
                 [
@@ -171,15 +167,14 @@ describe("Ramp", function () {
             const tokenAmount = getValidTokenAmount();
             const tokenAmountEncoded = ethers.utils.defaultAbiCoder.encode(
                 [
-                    "string", "uint256", "string", "string", "string", "uint256"
+                    "uint256", "string", "string", "uint256", "bytes"
                 ],
                 [
-                    tokenAmount.swapId,
                     tokenAmount.targetChainId,
-                    tokenAmount.targetContractAddress,
                     tokenAmount.tokenAddress,
-                    tokenAmount.originToken,
-                    tokenAmount.amount
+                    tokenAmount.symbol,
+                    tokenAmount.amount,
+                    tokenAmount.extraData,
                 ]
             );
 
@@ -191,6 +186,10 @@ describe("Ramp", function () {
             ).to.be.revertedWith('Insufficient or invalid signatures');
         });
     });
+
+    function base64ToBytes(base64) {
+        return Uint8Array.from(Buffer.from(base64, 'base64'));
+    }
 
     function getValidReportContext(mockRouter) {
         return {
@@ -204,12 +203,11 @@ describe("Ramp", function () {
 
     function getValidTokenAmount() {
         return {
-            swapId: "SWAP123",
             targetChainId: 2,
-            targetContractAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
             tokenAddress: "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0",
-            originToken: "ETH",
+            symbol: "ETH",
             amount: TOKEN_AMOUNT,
+            extraData: ethers.utils.toUtf8Bytes("swapid"),
         };
     }
 
