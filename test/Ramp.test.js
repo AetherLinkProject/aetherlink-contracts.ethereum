@@ -143,7 +143,7 @@ describe("Ramp", function () {
                     reportContext.targetChainId,
                     reportContext.sender,
                     reportContext.receiver,
-                    message,
+                    message
                 );
         });
 
