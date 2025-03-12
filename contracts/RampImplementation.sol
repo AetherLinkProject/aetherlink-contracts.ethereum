@@ -115,9 +115,9 @@ contract RampImplementation is ProxyStorage {
     }
 
     function transmit(
-        bytes calldata reportContextDecoded,
+        bytes calldata reportContextBytes,
         bytes calldata message,
-        bytes calldata tokenTransferMetadataDecoded,
+        bytes calldata tokenTransferMetadataBytes,
         bytes32[] memory rs,
         bytes32[] memory ss,
         bytes32 rawVs
@@ -128,11 +128,11 @@ contract RampImplementation is ProxyStorage {
         require(rawVs.length > 0, "invalide rv");
 
         ReportContext memory reportContext = decodeReportContext(
-            reportContextDecoded
+            reportContextBytes
         );
         IRamp.TokenTransferMetadata
             memory tokenTransferMetadata = decodeTokenTransferMetadata(
-                tokenTransferMetadataDecoded
+                tokenTransferMetadataBytes
             );
 
         require(reportContext.targetChainId > 0, "Invalid targetChainId.");
@@ -143,9 +143,9 @@ contract RampImplementation is ProxyStorage {
 
         bytes32 reportHash = keccak256(
             abi.encode(
-                reportContextDecoded,
+                reportContextBytes,
                 message,
-                tokenTransferMetadataDecoded
+                tokenTransferMetadataBytes
             )
         );
         require(
