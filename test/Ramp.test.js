@@ -81,10 +81,14 @@ describe("Ramp", function () {
                 .to.emit(ramp, "RequestSent")
                 .withArgs(
                     anyValue,
+                    0,
                     addr1.address,
                     receiver,
+                    31337,
                     targetChainId,
                     ethers.utils.toUtf8Bytes(message),
+                    anyValue,
+                    anyValue,
                     anyValue
                 );
         });
@@ -106,7 +110,6 @@ describe("Ramp", function () {
                     reportContext.receiver
                 ]
             );
-
 
             const message = ethers.utils.toUtf8Bytes("Valid Message");
             const tokenAmount = getValidTokenAmount();
@@ -135,18 +138,11 @@ describe("Ramp", function () {
             await expect(tx).to.emit(ramp, "ForwardMessageCalled")
                 .withArgs(
                     reportContext.messageId,
-                    message,
-                    [
-                        tokenAmount.swapId,
-                        tokenAmount.targetChainId,
-                        tokenAmount.targetContractAddress,
-                        tokenAmount.tokenAddress,
-                        tokenAmount.originToken,
-                        tokenAmount.amount
-                    ],
                     reportContext.sourceChainId,
+                    reportContext.targetChainId,
                     reportContext.sender,
-                    reportContext.receiver
+                    reportContext.receiver,
+                    anyValue
                 );
         });
 

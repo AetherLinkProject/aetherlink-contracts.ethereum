@@ -134,9 +134,11 @@ contract RampImplementation is ProxyStorage {
         ReportContext memory reportContext = decodeReportContext(
             reportContextDecoded
         );
-        IRamp.TokenAmount memory tokenAmount = decodeTokenAmount(
-            tokenAmountDecoded
-        );
+        
+        IRamp.TokenAmount memory tokenAmount;
+        if (tokenAmountDecoded.length > 0) {
+            tokenAmount = decodeTokenAmount(tokenAmountDecoded);
+        }
 
         require(reportContext.targetChainId > 0, "Invalid targetChainId.");
         require(
