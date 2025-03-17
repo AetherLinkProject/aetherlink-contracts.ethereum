@@ -25,8 +25,8 @@ describe("Ramp", function () {
         const RouterMock = await ethers.getContractFactory("MockRouter");
         mockRouter = await RouterMock.deploy();
         await mockRouter.deployed();
-        return { ramp, rampProxy, mockRouter, owner, addr1, addr2, wallet1, wallet2, wallet3 }
 
+        return { ramp, rampProxy, mockRouter, owner, addr1, addr2, wallet1, wallet2, wallet3 }
     }
 
 
@@ -66,7 +66,7 @@ describe("Ramp", function () {
 
     describe("SendRequest", () => {
         it("should emit RequestSent event and compute correct messageId on valid inputs", async () => {
-            const { ramp, addr1, mockRouter } = await loadFixture(deployRampFixture);
+            const { ramp, owner, addr1, mockRouter } = await loadFixture(deployRampFixture);
             const sourceChainId = 31337;
             const targetChainId = 2;
             const receiver = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0";
@@ -80,6 +80,8 @@ describe("Ramp", function () {
             //     ["address", "uint256", "string"],
             //     tokenTransferMetadataBytes
             // );
+            await ramp.connect(owner).addRampSender(addr1.address);
+
             const tx = await ramp.connect(addr1).sendRequest(targetChainId, mockRouter.address, ethers.utils.toUtf8Bytes(message), tokenAmount);
             await expect(tx)
                 .to.emit(ramp, "RequestSent")
@@ -98,7 +100,7 @@ describe("Ramp", function () {
 
     describe("Transmit", () => {
         it("should pass when valid signatures are provided and forward the message", async function () {
-            const { ramp, addr1, mockRouter, wallet1, wallet2, wallet3 } = await loadFixture(deployRampFixture);
+            const { ramp, owner, addr1, mockRouter, wallet1, wallet2, wallet3 } = await loadFixture(deployRampFixture);
             const reportContext = getValidReportContext(mockRouter);
             const reportContextEncoded = ethers.utils.defaultAbiCoder.encode(
                 [
@@ -134,6 +136,8 @@ describe("Ramp", function () {
 
             const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded);
             const { rs, ss, rawVs } = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
+
+            await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
             const tx = await ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, rs, ss, rawVs);
 
             await expect(tx).to.emit(ramp, "ForwardMessageCalled")
@@ -148,7 +152,7 @@ describe("Ramp", function () {
         });
 
         it("should fail if insufficient valid signatures are provided", async function () {
-            const { ramp, addr1, mockRouter, wallet1 } = await loadFixture(deployRampFixture);
+            const { ramp, owner, addr1, mockRouter, wallet1 } = await loadFixture(deployRampFixture);
             const reportContext = getValidReportContext(mockRouter);
             const reportContextEncoded = ethers.utils.defaultAbiCoder.encode(
                 [
@@ -181,15 +185,12 @@ describe("Ramp", function () {
             const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded);
             const { rs, ss, rawVs } = generateSigns(reportHash, [wallet1.privateKey]);
 
+            await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
             await expect(
                 ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, rs, ss, rawVs)
             ).to.be.revertedWith('Insufficient or invalid signatures');
         });
     });
-
-    function base64ToBytes(base64) {
-        return Uint8Array.from(Buffer.from(base64, 'base64'));
-    }
 
     function getValidReportContext(mockRouter) {
         return {

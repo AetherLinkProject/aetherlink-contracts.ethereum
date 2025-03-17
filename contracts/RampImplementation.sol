@@ -19,8 +19,15 @@ contract RampImplementation is ProxyStorage {
     mapping(address => bool) private isOracleNode;
     uint256 public signatureThreshold;
     uint256 public epoch;
+    mapping(address => bool) private authorizedSenders;
+    uint256[] private authorizedSourceChainIdListArray;
+    mapping(uint256 => bool) public authorizedSourceChainIdList;
+    uint256[] private authorizedTargetChainIdListArray;
+    mapping(uint256 => bool) public authorizedTargetChainIdList;
 
     error InvalidSigner(address signer);
+    error InvalidSender(address sender);
+
     struct ReportContext {
         bytes32 messageId;
         uint256 sourceChainId;
@@ -35,6 +42,15 @@ contract RampImplementation is ProxyStorage {
             "Caller is not an authorized oracle node"
         );
         // console.log("Oracle check passed for:", msg.sender); // Debug oracle check
+        _;
+    }
+
+    modifier onlyAuthorizedSender() {
+        require(
+            authorizedSenders[msg.sender],
+            "Caller is not an authorized sender"
+        );
+
         _;
     }
 
@@ -73,6 +89,24 @@ contract RampImplementation is ProxyStorage {
         return initialized;
     }
 
+    function isAuthorizedSender(address sender) external view returns (bool) {
+        return authorizedSenders[sender];
+    }
+
+    function addRampSender(address sender) external onlyOwner {
+        require(sender != address(0), "Invalid sender address");
+        require(!authorizedSenders[sender], "Sender already whitelisted");
+
+        authorizedSenders[sender] = true;
+    }
+
+    function removeRampSenderFrom(address sender) external onlyOwner {
+        require(sender != address(0), "Invalid sender address");
+        require(authorizedSenders[sender], "Sender not in whitelist");
+
+        delete authorizedSenders[sender];
+    }
+
     function updateOracleNodes(
         address[] calldata newOracleNodes
     ) external onlyOwner {
@@ -80,12 +114,19 @@ contract RampImplementation is ProxyStorage {
         _updateOracleNodes(newOracleNodes);
     }
 
+    function updateChainIdWhitelist(
+        uint256[] calldata newSourceChainIds,
+        uint256[] calldata newTargetChainIds
+    ) external onlyOwner {
+        _updateChainIdWhitelist(newSourceChainIds, newTargetChainIds);
+    }
+
     function sendRequest(
         uint256 targetChainId,
         string calldata receiver,
         bytes calldata message,
         IRamp.TokenTransferMetadata calldata tokenTransferMetadata
-    ) external returns (bytes32 messageId) {
+    ) external onlyAuthorizedSender returns (bytes32 messageId) {
         messageId = keccak256(
             abi.encode(
                 msg.sender,
@@ -129,6 +170,11 @@ contract RampImplementation is ProxyStorage {
 
         ReportContext memory reportContext = decodeReportContext(
             reportContextBytes
+        );
+
+        require(
+            authorizedSourceChainIdList[reportContext.sourceChainId],
+            "sourceChainId not supportted"
         );
 
         IRamp.TokenTransferMetadata memory tokenTransferMetadata;
@@ -289,6 +335,47 @@ contract RampImplementation is ProxyStorage {
 
         signatureThreshold = (oracleNodes.length + 1) / 2 + 1;
         // console.log("Updated signature threshold:", signatureThreshold); // Debug threshold update
+    }
+
+    function _updateChainIdWhitelist(
+        uint256[] calldata newSourceChainIds,
+        uint256[] calldata newTargetChainIds
+    ) internal {
+        // source chain ids
+        for (uint256 i = 0; i < authorizedSourceChainIdListArray.length; i++) {
+            authorizedSourceChainIdList[
+                authorizedSourceChainIdListArray[i]
+            ] = false;
+        }
+        delete authorizedSourceChainIdListArray;
+
+        for (uint256 i = 0; i < newSourceChainIds.length; i++) {
+            require(newSourceChainIds[i] > 0, "Invalid chainId");
+            require(
+                !authorizedSourceChainIdList[newSourceChainIds[i]],
+                "Duplicate chainId"
+            );
+            authorizedSourceChainIdList[newSourceChainIds[i]] = true;
+            authorizedSourceChainIdListArray.push(newSourceChainIds[i]);
+        }
+
+        // target chain ids
+        for (uint256 i = 0; i < authorizedTargetChainIdListArray.length; i++) {
+            authorizedTargetChainIdList[
+                authorizedTargetChainIdListArray[i]
+            ] = false;
+        }
+        delete authorizedTargetChainIdListArray;
+
+        for (uint256 i = 0; i < newTargetChainIds.length; i++) {
+            require(newTargetChainIds[i] > 0, "Invalid chainId");
+            require(
+                !authorizedSourceChainIdList[newTargetChainIds[i]],
+                "Duplicate chainId"
+            );
+            authorizedSourceChainIdList[newTargetChainIds[i]] = true;
+            authorizedSourceChainIdListArray.push(newTargetChainIds[i]);
+        }
     }
 
     // for debug
