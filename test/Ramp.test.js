@@ -80,6 +80,7 @@ describe("Ramp", function () {
             //     ["address", "uint256", "string"],
             //     tokenTransferMetadataBytes
             // );
+            await ramp.connect(owner).updateChainIdWhitelist([31337], [2]);
             await ramp.connect(owner).addRampSender(addr1.address);
 
             const tx = await ramp.connect(addr1).sendRequest(targetChainId, mockRouter.address, ethers.utils.toUtf8Bytes(message), tokenAmount);

@@ -374,11 +374,11 @@ contract RampImplementation is ProxyStorage {
         for (uint256 i = 0; i < newTargetChainIds.length; i++) {
             require(newTargetChainIds[i] > 0, "Invalid chainId");
             require(
-                !authorizedSourceChainIdList[newTargetChainIds[i]],
+                !authorizedTargetChainIdList[newTargetChainIds[i]],
                 "Duplicate chainId"
             );
-            authorizedSourceChainIdList[newTargetChainIds[i]] = true;
-            authorizedSourceChainIdListArray.push(newTargetChainIds[i]);
+            authorizedTargetChainIdList[newTargetChainIds[i]] = true;
+            authorizedTargetChainIdListArray.push(newTargetChainIds[i]);
         }
     }
 
