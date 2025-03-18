@@ -127,6 +127,10 @@ contract RampImplementation is ProxyStorage {
         bytes calldata message,
         IRamp.TokenTransferMetadata calldata tokenTransferMetadata
     ) external onlyAuthorizedSender returns (bytes32 messageId) {
+        require(
+            authorizedTargetChainIdList[targetChainId],
+            "targetChainId not supportted"
+        );
         messageId = keccak256(
             abi.encode(
                 msg.sender,
