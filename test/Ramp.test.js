@@ -12,6 +12,7 @@ describe("Ramp", function () {
         wallet1 = new ethers.Wallet("59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d");
         wallet2 = new ethers.Wallet("5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a");
         wallet3 = new ethers.Wallet("7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6");
+        wallet4 = new ethers.Wallet("47e179ec197488593b187f80a00eb0da91f1b9d0b13f8733639f19c30a34926a");
         const initialOracleNodes = [wallet1.address, wallet2.address, wallet3.address];
 
         // Deploy Ramp Contract
@@ -26,9 +27,8 @@ describe("Ramp", function () {
         mockRouter = await RouterMock.deploy();
         await mockRouter.deployed();
 
-        return { ramp, rampProxy, mockRouter, owner, addr1, addr2, wallet1, wallet2, wallet3 }
+        return { ramp, rampProxy, mockRouter, owner, addr1, addr2, wallet1, wallet2, wallet3, wallet4 }
     }
-
 
     describe("Deploy", function () {
         describe("owner test", function () {
@@ -60,6 +60,28 @@ describe("Ramp", function () {
                 const { ramp } = await loadFixture(deployRampFixture);
                 const expectedThreshold = Math.floor((3 + 1) / 2) + 1; // Threshold = 2 when 3 nodes exist
                 expect(await ramp.signatureThreshold()).to.equal(expectedThreshold);
+            });
+        })
+
+        describe("update oracle test", function () {
+            it("update oracle nodes correctly", async () => {
+                const { ramp, addr1, addr2, wallet2, wallet3, wallet4 } = await loadFixture(deployRampFixture);
+                const oracleNodes = await ramp.getOracleNodes();
+                expect(oracleNodes.length).to.equal(3);
+                expect(oracleNodes).to.include(addr1.address);
+
+                ramp.updateOracleNodes([wallet2.address, wallet3.address, wallet4.address])
+                const newOracleNodes = await ramp.getOracleNodes();
+                expect(newOracleNodes.length).to.equal(3);
+                expect(newOracleNodes).to.include(addr2.address);
+            });
+
+            it("only owner can update oracle nodes", async () => {
+                const { ramp, addr1, wallet2, wallet3, wallet4 } = await loadFixture(deployRampFixture);
+
+                await expect(
+                    ramp.connect(addr1).updateOracleNodes([wallet2.address, wallet3.address, wallet4.address])
+                ).to.be.revertedWith('Ownable: caller is not the owner');
             });
         })
     });
