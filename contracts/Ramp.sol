@@ -30,9 +30,7 @@ contract Ramp is Proxy {
         return returnData;
     }
 
-    receive() external payable {}
-
-    fallback() external payable {
+    fallback() external {
         // delegate all other functions to current implementation
         (bool success, ) = _implementation.delegatecall(msg.data);
         assembly {

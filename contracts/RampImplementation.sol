@@ -9,6 +9,7 @@ import "./Proxy.sol";
 import "./interfaces/RampInterface.sol";
 import "./interfaces/RouterInterface.sol";
 import "hardhat/console.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 pragma solidity 0.8.9;
 
@@ -25,8 +26,25 @@ contract RampImplementation is ProxyStorage {
     uint256[] private authorizedTargetChainIdListArray;
     mapping(uint256 => bool) public authorizedTargetChainIdList;
 
+    mapping(bytes32 => bool) private processedReports;
+    bytes32 private constant TRANSMIT_TYPEHASH =
+        keccak256(
+            "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash,address contractAddress)"
+        );
+
+    using ECDSA for bytes32;
+
     error InvalidSigner(address signer);
     error InvalidSender(address sender);
+
+    event ContractInitialized(address[] initialNodes);
+    event RampSenderAdded(address sender);
+    event RampSenderRemoved(address sender);
+    event OracleNodesUpdated(address[] newOracleNodes);
+    event ChainIdWhitelistUpdated(
+        uint256[] newSourceChainIds,
+        uint256[] newTargetChainIds
+    );
 
     struct ReportContext {
         bytes32 messageId;
@@ -79,6 +97,8 @@ contract RampImplementation is ProxyStorage {
         initialized = true;
 
         _updateOracleNodes(initialNodes);
+
+        emit ContractInitialized(initialNodes);
     }
 
     function getOracleNodes() external view returns (address[] memory) {
@@ -98,6 +118,8 @@ contract RampImplementation is ProxyStorage {
         require(!authorizedSenders[sender], "Sender already whitelisted");
 
         authorizedSenders[sender] = true;
+
+        emit RampSenderAdded(sender);
     }
 
     function removeRampSenderFrom(address sender) external onlyOwner {
@@ -105,6 +127,8 @@ contract RampImplementation is ProxyStorage {
         require(authorizedSenders[sender], "Sender not in whitelist");
 
         delete authorizedSenders[sender];
+
+        emit RampSenderRemoved(sender);
     }
 
     function updateOracleNodes(
@@ -112,6 +136,8 @@ contract RampImplementation is ProxyStorage {
     ) external onlyOwner {
         // console.log("Updating oracle nodes..."); // Log message
         _updateOracleNodes(newOracleNodes);
+
+        emit OracleNodesUpdated(newOracleNodes);
     }
 
     function updateChainIdWhitelist(
@@ -119,6 +145,8 @@ contract RampImplementation is ProxyStorage {
         uint256[] calldata newTargetChainIds
     ) external onlyOwner {
         _updateChainIdWhitelist(newSourceChainIds, newTargetChainIds);
+
+        emit ChainIdWhitelistUpdated(newSourceChainIds, newTargetChainIds);
     }
 
     function sendRequest(
@@ -138,6 +166,7 @@ contract RampImplementation is ProxyStorage {
                 receiver,
                 message,
                 tokenTransferMetadata,
+                epoch,
                 block.timestamp
             )
         );
@@ -163,14 +192,21 @@ contract RampImplementation is ProxyStorage {
         bytes calldata reportContextBytes,
         bytes calldata message,
         bytes calldata tokenTransferMetadataBytes,
-        bytes32[] memory rs,
-        bytes32[] memory ss,
-        bytes32 rawVs
+        bytes[] calldata signatures
     ) external onlyOracleNode {
-        require(message.length > 0, "invalide message");
-        require(rs.length > 0, "invalide rs");
-        require(ss.length > 0, "invalide ss");
-        require(rawVs.length > 0, "invalide rv");
+        require(message.length > 0, "Invalid message");
+
+        bytes32 reportHash = _buildEIP712ReportHash(
+            reportContextBytes,
+            message,
+            tokenTransferMetadataBytes
+        );
+
+        require(
+            !processedReports[reportHash],
+            "Duplicate report: already processed"
+        );
+        processedReports[reportHash] = true;
 
         ReportContext memory reportContext = decodeReportContext(
             reportContextBytes
@@ -194,11 +230,8 @@ contract RampImplementation is ProxyStorage {
             "Invalid receiver address."
         );
 
-        bytes32 reportHash = keccak256(
-            abi.encode(reportContextBytes, message, tokenTransferMetadataBytes)
-        );
         require(
-            _validateSignatures(reportHash, rs, ss, rawVs),
+            _validateSignatures(reportHash, signatures),
             "Insufficient or invalid signatures"
         );
 
@@ -285,34 +318,31 @@ contract RampImplementation is ProxyStorage {
     // --- Internal Helpers ---
     function _validateSignatures(
         bytes32 reportHash,
-        bytes32[] memory rs,
-        bytes32[] memory ss,
-        bytes32 rawVs
+        bytes[] memory signatures
     ) internal view returns (bool) {
-        require(rs.length == ss.length, "Mismatched signature arrays");
-        require(rs.length <= oracleNodes.length, "Too many signatures");
+        require(signatures.length > 0, "No signatures provided");
+        require(signatures.length <= 32, "Too many signatures: max 32");
 
         // Track valid signatures
         uint256 validSignatures = 0;
+        address[] memory signers = new address[](signatures.length);
+        for (uint256 i = 0; i < signatures.length; i++) {
+            address recoveredSigner = ECDSA.recover(reportHash, signatures[i]);
+            require(
+                recoveredSigner != address(0),
+                "Invalid signature: zero address"
+            );
 
-        address[] memory signers = new address[](rs.length);
-        for (uint256 i = 0; i < rs.length; i++) {
-            uint8 v = uint8(rawVs[i]); // Extract normalized `v` value
+            require(
+                !_contains(signers, recoveredSigner),
+                "Non-unique signature"
+            );
+            signers[i] = recoveredSigner;
 
-            // Ensure `v` is valid (27 or 28)
-            if (v < 27) v += 27;
-
-            // Recover signer address
-            address recovered = ecrecover(reportHash, v, rs[i], ss[i]);
-            require(recovered != address(0), "Invalid signature: zero address");
-            require(!_contains(signers, recovered), "non-unique signature");
-            signers[i] = recovered;
-
-            // Ensure recovered signer is an authorized oracle node
-            if (isOracleNode[recovered]) {
+            if (isOracleNode[recoveredSigner]) {
                 validSignatures++;
             } else {
-                revert InvalidSigner(recovered);
+                revert InvalidSigner(recoveredSigner);
             }
         }
 
@@ -380,6 +410,44 @@ contract RampImplementation is ProxyStorage {
             authorizedTargetChainIdList[newTargetChainIds[i]] = true;
             authorizedTargetChainIdListArray.push(newTargetChainIds[i]);
         }
+    }
+
+    function _buildDomainSeparator() private view returns (bytes32) {
+        return
+            keccak256(
+                abi.encode(
+                    keccak256(
+                        "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                    ),
+                    keccak256(bytes("RampImplementation")),
+                    keccak256(bytes("1")),
+                    block.chainid,
+                    address(this)
+                )
+            );
+    }
+
+    function _buildEIP712ReportHash(
+        bytes calldata reportContextBytes,
+        bytes calldata message,
+        bytes calldata tokenTransferMetadataBytes
+    ) private view returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    "\x19\x01", // EIP-712
+                    _buildDomainSeparator(),
+                    keccak256(
+                        abi.encode(
+                            TRANSMIT_TYPEHASH,
+                            keccak256(reportContextBytes),
+                            keccak256(message),
+                            keccak256(tokenTransferMetadataBytes),
+                            address(this)
+                        )
+                    )
+                )
+            );
     }
 
     // for debug

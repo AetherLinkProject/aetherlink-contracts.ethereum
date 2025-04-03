@@ -122,6 +122,46 @@ describe("Ramp", function () {
     });
 
     describe("Transmit", () => {
+        it("should correctly recover signer addresses", async function () {
+            const { ramp, mockRouter, wallet1, wallet2, wallet3 } = await loadFixture(deployRampFixture);
+            const reportContext = getValidReportContext(mockRouter);
+            const reportContextEncoded = ethers.utils.defaultAbiCoder.encode(
+                [
+                    "bytes32", "uint256", "uint256", "string", "address",
+                ],
+                [
+                    reportContext.messageId,
+                    reportContext.sourceChainId,
+                    reportContext.targetChainId,
+                    reportContext.sender,
+                    reportContext.receiver
+                ]
+            );
+
+            const message = ethers.utils.toUtf8Bytes("Valid Message");
+            const tokenAmount = getValidTokenAmount();
+            const tokenAmountEncoded = ethers.utils.defaultAbiCoder.encode(
+                [
+                    "uint256", "string", "string", "uint256", "bytes"
+                ],
+                [
+                    tokenAmount.targetChainId,
+                    tokenAmount.tokenAddress,
+                    tokenAmount.symbol,
+                    tokenAmount.amount,
+                    tokenAmount.extraData,
+                ]
+            );
+
+            const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const signatures = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
+            const recoveredAddress = ethers.utils.recoverAddress(reportHash, signatures[0]);
+
+            console.log("Recovered Address:", recoveredAddress);
+
+            expect(recoveredAddress).to.equal(wallet1.address);
+        });
+
         it("should pass when valid signatures are provided and forward the message", async function () {
             const { ramp, owner, addr1, mockRouter, wallet1, wallet2, wallet3 } = await loadFixture(deployRampFixture);
             const reportContext = getValidReportContext(mockRouter);
@@ -157,11 +197,11 @@ describe("Ramp", function () {
             console.log("Message Hash (Test):", message);
             console.log("TokenAmount Hash (Test):", tokenAmountEncoded);
 
-            const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded);
-            const { rs, ss, rawVs } = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
+            const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const signatures = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
 
             await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
-            const tx = await ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, rs, ss, rawVs);
+            const tx = await ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, signatures);
 
             await expect(tx).to.emit(ramp, "ForwardMessageCalled")
                 .withArgs(
@@ -205,12 +245,12 @@ describe("Ramp", function () {
                 ]
             );
 
-            const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded);
-            const { rs, ss, rawVs } = generateSigns(reportHash, [wallet1.privateKey]);
+            const reportHash = generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const signatures = generateSigns(reportHash, [wallet1.privateKey]);
 
             await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
             await expect(
-                ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, rs, ss, rawVs)
+                ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, signatures)
             ).to.be.revertedWith('Insufficient or invalid signatures');
         });
     });
@@ -235,37 +275,72 @@ describe("Ramp", function () {
         };
     }
 
-    function generateReportBytesHash(reportContextEncoded, message, tokenAmountEncoded) {
+    function generateReportBytesHash(
+        reportContextBytes,
+        message,
+        tokenAmountBytes,
+        contractAddress
+    ) {
+        const typeHash = ethers.utils.keccak256(
+            ethers.utils.toUtf8Bytes(
+                "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash,address contractAddress)"
+            )
+        );
+
+        const reportContextHash = ethers.utils.keccak256(reportContextBytes);
+        const messageHash = ethers.utils.keccak256(message);
+        const tokenTransferHash = ethers.utils.keccak256(tokenAmountBytes);
+        const domainSeparator = buildDomainSeparator(contractAddress);
+        const structHash = ethers.utils.keccak256(
+            ethers.utils.defaultAbiCoder.encode(
+                ["bytes32", "bytes32", "bytes32", "bytes32", "address"],
+                [typeHash, reportContextHash, messageHash, tokenTransferHash, contractAddress]
+            )
+        );
+
+        return ethers.utils.keccak256(
+            ethers.utils.solidityPack(
+                ["string", "bytes32", "bytes32"],
+                ["\x19\x01", domainSeparator, structHash]
+            )
+        );
+    }
+
+    function buildDomainSeparator(contractAddress) {
         return ethers.utils.keccak256(
             ethers.utils.defaultAbiCoder.encode(
                 [
-                    "bytes", // ReportContext
-                    "bytes", // Message
-                    "bytes", // TokenAmount
+                    "bytes32", // EIP-712 Domain TypeHash
+                    "bytes32", // Contract Name
+                    "bytes32", // Contract Version
+                    "uint256", // ChainID
+                    "address"  // Verifying Contract
                 ],
                 [
-                    reportContextEncoded,
-                    message,
-                    tokenAmountEncoded,
+                    ethers.utils.keccak256(
+                        ethers.utils.toUtf8Bytes(
+                            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
+                        )
+                    ),
+                    ethers.utils.keccak256(ethers.utils.toUtf8Bytes("RampImplementation")),
+                    ethers.utils.keccak256(ethers.utils.toUtf8Bytes("1")),
+                    ethers.BigNumber.from(31337),
+                    contractAddress
                 ]
             )
         );
     }
 
     function generateSigns(hash, privateKeys) {
-        var rs = [];
-        var ss = [];
-        let buffer = new Array(32);
-        for (var i = 0; i < privateKeys.length; i++) {
-            let signKey = new ethers.utils.SigningKey(privateKeys[i]);
-            var Signature = signKey.signDigest(hash);
-            rs.push(Signature.r);
-            ss.push(Signature.s);
-            var vv = Signature.v == 27 ? "00" : "01";
-            buffer[i] = vv;
+        const signatures = [];
+        for (let i = 0; i < privateKeys.length; i++) {
+            const wallet = new ethers.Wallet(privateKeys[i]);
+            const signature = wallet._signingKey().signDigest(hash);
+            const fullSignature = ethers.utils.joinSignature(signature);
+            signatures.push(fullSignature);
         }
-        const rawVs = buildRawVs(buffer)
-        return { rs, ss, rawVs };
+
+        return signatures;
     }
 
     function buildRawVs(buffer) {
