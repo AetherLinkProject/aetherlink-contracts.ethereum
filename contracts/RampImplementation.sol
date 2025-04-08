@@ -9,7 +9,7 @@ import "hardhat/console.sol";
 
 pragma solidity 0.8.9;
 
-contract RampImplementation is ProxyStorage {
+contract RampImplementation is ProxyStorage, IRamp {
     bool private initialized;
     address[] private oracleNodes;
     mapping(address => bool) private isOracleNode;
@@ -22,10 +22,8 @@ contract RampImplementation is ProxyStorage {
     mapping(uint256 => bool) public authorizedTargetChainIdList;
 
     mapping(bytes32 => bool) private processedReports;
-    bytes32 private constant TRANSMIT_TYPEHASH =
-        keccak256(
-            "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
-        );
+    bytes32 TRANSMIT_TYPEHASH;
+    bytes32 DOMAIN_SEPARATOR;
 
     error InvalidSigner(address signer);
 
@@ -51,7 +49,7 @@ contract RampImplementation is ProxyStorage {
             isOracleNode[msg.sender],
             "Caller is not an authorized oracle node"
         );
-        
+
         _;
     }
 
@@ -87,6 +85,8 @@ contract RampImplementation is ProxyStorage {
     function initialize(address[] memory initialNodes) external onlyOwner {
         require(!initialized, "Already initialized");
         initialized = true;
+        DOMAIN_SEPARATOR = _buildDomainSeparator();
+        TRANSMIT_TYPEHASH = _buildTransmitTypeHash();
 
         _updateOracleNodes(initialNodes);
 
@@ -99,6 +99,14 @@ contract RampImplementation is ProxyStorage {
 
     function getInitialized() external view returns (bool) {
         return initialized;
+    }
+
+    function getDomainSeparator() external view returns (bytes32) {
+        return _buildDomainSeparator();
+    }
+
+    function getTransmitTypeHash() external view returns (bytes32) {
+        return _buildTransmitTypeHash();
     }
 
     function isAuthorizedSender(address sender) external view returns (bool) {
@@ -406,10 +414,17 @@ contract RampImplementation is ProxyStorage {
                         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
                     ),
                     keccak256(bytes("RampImplementation")),
-                    keccak256(bytes("1")),
+                    keccak256(bytes("1.0.0")),
                     block.chainid,
                     address(this)
                 )
+            );
+    }
+
+    function _buildTransmitTypeHash() private view returns (bytes32) {
+        return
+            keccak256(
+                "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
             );
     }
 
@@ -422,14 +437,13 @@ contract RampImplementation is ProxyStorage {
             keccak256(
                 abi.encodePacked(
                     "\x19\x01", // EIP-712
-                    _buildDomainSeparator(),
+                    DOMAIN_SEPARATOR,
                     keccak256(
                         abi.encode(
                             TRANSMIT_TYPEHASH,
-                            reportContextBytes,
-                            message,
-                            tokenTransferMetadataBytes,
-                            address(this)
+                            keccak256(reportContextBytes),
+                            keccak256(message),
+                            keccak256(tokenTransferMetadataBytes)
                         )
                     )
                 )

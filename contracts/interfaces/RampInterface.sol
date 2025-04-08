@@ -10,14 +10,6 @@ interface IRamp {
         bytes extraData;
     }
 
-    event ForwardMessageCalled(
-        TokenTransferMetadata tokenTransferMetadata,
-        string message,
-        uint256 sourceChainId,
-        string sender,
-        address receiver
-    );
-
     function sendRequest(
         uint256 targetChainId,
         string calldata receiver,
