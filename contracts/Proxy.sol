@@ -7,7 +7,6 @@ contract ProxyStorage is Ownable {
 
 contract Proxy is ProxyStorage {
     event ProxyUpdated(address indexed _new, address indexed _old);
-    event OwnerUpdate(address _prevOwner, address _newOwner);
 
     constructor(address _proxyTo) {
         updateImplementation(_proxyTo);

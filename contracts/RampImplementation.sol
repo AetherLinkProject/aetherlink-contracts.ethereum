@@ -413,8 +413,8 @@ contract RampImplementation is ProxyStorage, IRamp {
                     keccak256(
                         "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
                     ),
-                    keccak256(bytes("RampImplementation")),
-                    keccak256(bytes("1.0.0")),
+                    keccak256("RampImplementation"),
+                    keccak256("1.0.0"),
                     block.chainid,
                     address(this)
                 )
@@ -424,7 +424,7 @@ contract RampImplementation is ProxyStorage, IRamp {
     function _buildTransmitTypeHash() private view returns (bytes32) {
         return
             keccak256(
-                "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
+                "Transmit(bytes reportContextBytes, bytes message, bytes tokenTransferMetadataBytes)"
             );
     }
 
