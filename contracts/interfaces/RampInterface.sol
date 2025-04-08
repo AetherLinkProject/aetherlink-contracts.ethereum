@@ -10,17 +10,6 @@ interface IRamp {
         bytes extraData;
     }
 
-    struct Request {
-        bytes32 id;
-        address sender;
-        address receiver;
-        uint256 targetChainId;
-        bytes data;
-        TokenTransferMetadata tokenTransferMetadata;
-        uint256 timestamp;
-        bool fulfilled;
-    }
-
     event ForwardMessageCalled(
         TokenTransferMetadata tokenTransferMetadata,
         string message,

@@ -251,7 +251,7 @@ describe("Ramp", function () {
             await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
             await expect(
                 ramp.connect(addr1).transmit(reportContextEncoded, message, tokenAmountEncoded, signatures)
-            ).to.be.revertedWith('Insufficient or invalid signatures');
+            ).to.be.revertedWith('Not enough signatures');
         });
     });
 
@@ -283,18 +283,15 @@ describe("Ramp", function () {
     ) {
         const typeHash = ethers.utils.keccak256(
             ethers.utils.toUtf8Bytes(
-                "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash,address contractAddress)"
+                "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
             )
         );
 
-        const reportContextHash = ethers.utils.keccak256(reportContextBytes);
-        const messageHash = ethers.utils.keccak256(message);
-        const tokenTransferHash = ethers.utils.keccak256(tokenAmountBytes);
         const domainSeparator = buildDomainSeparator(contractAddress);
         const structHash = ethers.utils.keccak256(
             ethers.utils.defaultAbiCoder.encode(
-                ["bytes32", "bytes32", "bytes32", "bytes32", "address"],
-                [typeHash, reportContextHash, messageHash, tokenTransferHash, contractAddress]
+                ["bytes32", "bytes", "bytes", "bytes", "address"],
+                [typeHash, reportContextBytes, message, tokenAmountBytes, contractAddress]
             )
         );
 

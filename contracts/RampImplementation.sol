@@ -1,7 +1,4 @@
 // SPDX-License-Identifier: MIT
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
-import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -9,13 +6,11 @@ import "./Proxy.sol";
 import "./interfaces/RampInterface.sol";
 import "./interfaces/RouterInterface.sol";
 import "hardhat/console.sol";
-import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 pragma solidity 0.8.9;
 
 contract RampImplementation is ProxyStorage {
     bool private initialized;
-    uint256 public threshold; // Min signatures required for consensus
     address[] private oracleNodes;
     mapping(address => bool) private isOracleNode;
     uint256 public signatureThreshold;
@@ -29,13 +24,10 @@ contract RampImplementation is ProxyStorage {
     mapping(bytes32 => bool) private processedReports;
     bytes32 private constant TRANSMIT_TYPEHASH =
         keccak256(
-            "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash,address contractAddress)"
+            "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
         );
 
-    using ECDSA for bytes32;
-
     error InvalidSigner(address signer);
-    error InvalidSender(address sender);
 
     event ContractInitialized(address[] initialNodes);
     event RampSenderAdded(address sender);
@@ -59,7 +51,7 @@ contract RampImplementation is ProxyStorage {
             isOracleNode[msg.sender],
             "Caller is not an authorized oracle node"
         );
-        // console.log("Oracle check passed for:", msg.sender); // Debug oracle check
+        
         _;
     }
 
@@ -134,7 +126,6 @@ contract RampImplementation is ProxyStorage {
     function updateOracleNodes(
         address[] calldata newOracleNodes
     ) external onlyOwner {
-        // console.log("Updating oracle nodes..."); // Log message
         _updateOracleNodes(newOracleNodes);
 
         emit OracleNodesUpdated(newOracleNodes);
@@ -281,7 +272,6 @@ contract RampImplementation is ProxyStorage {
     function decodeReportContext(
         bytes calldata reportContextBytes
     ) internal returns (ReportContext memory) {
-        // Decode the ABI-encoded data into the ReportContext struct
         (
             bytes32 messageId,
             uint256 sourceChainId,
@@ -315,15 +305,16 @@ contract RampImplementation is ProxyStorage {
         return false;
     }
 
-    // --- Internal Helpers ---
     function _validateSignatures(
         bytes32 reportHash,
         bytes[] memory signatures
     ) internal view returns (bool) {
         require(signatures.length > 0, "No signatures provided");
-        require(signatures.length <= 32, "Too many signatures: max 32");
+        require(
+            signatures.length >= signatureThreshold,
+            "Not enough signatures"
+        );
 
-        // Track valid signatures
         uint256 validSignatures = 0;
         address[] memory signers = new address[](signatures.length);
         for (uint256 i = 0; i < signatures.length; i++) {
@@ -346,13 +337,10 @@ contract RampImplementation is ProxyStorage {
             }
         }
 
-        // Check signature threshold
-        // console.log("Valid Signatures:", validSignatures);
         return validSignatures >= signatureThreshold;
     }
 
     function _updateOracleNodes(address[] memory newOracleNodes) internal {
-        // console.log("Clearing current oracle nodes...");
         for (uint256 i = 0; i < oracleNodes.length; i++) {
             isOracleNode[oracleNodes[i]] = false;
         }
@@ -362,13 +350,11 @@ contract RampImplementation is ProxyStorage {
             require(newOracleNodes[j] != address(0), "Invalid node address");
             require(!isOracleNode[newOracleNodes[j]], "Duplicate node address");
 
-            // console.log("Adding new node:", newOracleNodes[j]); // Log new node addition
             oracleNodes.push(newOracleNodes[j]);
             isOracleNode[newOracleNodes[j]] = true;
         }
 
         signatureThreshold = (oracleNodes.length + 1) / 2 + 1;
-        // console.log("Updated signature threshold:", signatureThreshold); // Debug threshold update
     }
 
     function _updateChainIdWhitelist(
@@ -440,26 +426,13 @@ contract RampImplementation is ProxyStorage {
                     keccak256(
                         abi.encode(
                             TRANSMIT_TYPEHASH,
-                            keccak256(reportContextBytes),
-                            keccak256(message),
-                            keccak256(tokenTransferMetadataBytes),
+                            reportContextBytes,
+                            message,
+                            tokenTransferMetadataBytes,
                             address(this)
                         )
                     )
                 )
             );
     }
-
-    // for debug
-    // function debugReportHash(
-    //     ReportContext memory reportContext,
-    //     string memory message,
-    //     TokenTransferMetadata memory tokenTransferMetadata
-    // ) public pure returns (bytes32) {
-    //     return keccak256(abi.encode(reportContext, message, tokenTransferMetadata));
-    // }
-
-    // function debugRequestId(bytes32 requestId) public pure returns (bytes32) {
-    //     return requestId;
-    // }
 }
