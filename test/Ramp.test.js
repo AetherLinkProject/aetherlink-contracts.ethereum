@@ -159,8 +159,14 @@ describe("Ramp", function () {
             console.log(`domainSeparator: ${domainSeparator}`)
             console.log(`transmitTypeHash: ${transmitTypeHash}`)
 
-            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded);
+            console.log("Report hash result:", reportHash);
+
             const signatures = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
+            console.log("Wallet1 signatures", signatures[0]);
+            console.log("Wallet2 signatures", signatures[1]);
+            console.log("Wallet3 signatures", signatures[2]);
+
             const recoveredAddress = ethers.utils.recoverAddress(reportHash, signatures[0]);
 
             console.log("Recovered Address:", recoveredAddress);
@@ -205,7 +211,7 @@ describe("Ramp", function () {
 
             const domainSeparator = await ramp.getDomainSeparator();
             const transmitTypeHash = await ramp.getTransmitTypeHash();
-            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded);
             const signatures = generateSigns(reportHash, [wallet1.privateKey, wallet2.privateKey, wallet3.privateKey]);
 
             await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
@@ -255,7 +261,7 @@ describe("Ramp", function () {
 
             const domainSeparator = await ramp.getDomainSeparator();
             const transmitTypeHash = await ramp.getTransmitTypeHash();
-            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded, ramp.address);
+            const reportHash = generateReportBytesHash(transmitTypeHash, domainSeparator, reportContextEncoded, message, tokenAmountEncoded);
             const signatures = generateSigns(reportHash, [wallet1.privateKey]);
 
             await ramp.connect(owner).updateChainIdWhitelist([1], [2]);
@@ -290,55 +296,23 @@ describe("Ramp", function () {
         domainSeparator,
         reportContextBytes,
         message,
-        tokenAmountBytes,
-        contractAddress
+        tokenAmountBytes
     ) {
-        // const typeHash = ethers.utils.keccak256(
-        //     ethers.utils.toUtf8Bytes(
-        //         "Transmit(bytes32 reportContextHash,bytes32 messageHash,bytes32 tokenTransferHash)"
-        //     )
-        // );
-
         const reportContextHash = ethers.utils.keccak256(reportContextBytes);
         const messageHash = ethers.utils.keccak256(message);
         const tokenTransferHash = ethers.utils.keccak256(tokenAmountBytes);
-        // const domainSeparator = buildDomainSeparator(contractAddress);
         const structHash = ethers.utils.keccak256(
             ethers.utils.defaultAbiCoder.encode(
                 ["bytes32", "bytes32", "bytes32", "bytes32"],
                 [typeHash, reportContextHash, messageHash, tokenTransferHash]
             )
         );
+        console.log("Struct hash:", structHash);
 
         return ethers.utils.keccak256(
             ethers.utils.solidityPack(
                 ["string", "bytes32", "bytes32"],
                 ["\x19\x01", domainSeparator, structHash]
-            )
-        );
-    }
-
-    function buildDomainSeparator(contractAddress) {
-        return ethers.utils.keccak256(
-            ethers.utils.defaultAbiCoder.encode(
-                [
-                    "bytes32", // EIP-712 Domain TypeHash
-                    "bytes32", // Contract Name
-                    "bytes32", // Contract Version
-                    "uint256", // ChainID
-                    "address"  // Verifying Contract
-                ],
-                [
-                    ethers.utils.keccak256(
-                        ethers.utils.toUtf8Bytes(
-                            "EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)"
-                        )
-                    ),
-                    ethers.utils.keccak256(ethers.utils.toUtf8Bytes("RampImplementation")),
-                    ethers.utils.keccak256(ethers.utils.toUtf8Bytes("1.0.0")),
-                    ethers.BigNumber.from(31337),
-                    contractAddress
-                ]
             )
         );
     }
