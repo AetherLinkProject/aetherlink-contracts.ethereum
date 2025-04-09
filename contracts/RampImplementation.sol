@@ -229,10 +229,7 @@ contract RampImplementation is ProxyStorage, IRamp {
             "Invalid receiver address."
         );
 
-        require(
-            _validateSignatures(reportHash, signatures),
-            "Insufficient or invalid signatures"
-        );
+        _validateSignatures(reportHash, signatures);
 
         IRouter(reportContext.receiver).forwardMessage(
             reportContext.sourceChainId,
@@ -316,14 +313,12 @@ contract RampImplementation is ProxyStorage, IRamp {
     function _validateSignatures(
         bytes32 reportHash,
         bytes[] memory signatures
-    ) internal view returns (bool) {
-        require(signatures.length > 0, "No signatures provided");
+    ) internal view {
         require(
             signatures.length >= signatureThreshold,
             "Not enough signatures"
         );
 
-        uint256 validSignatures = 0;
         address[] memory signers = new address[](signatures.length);
         for (uint256 i = 0; i < signatures.length; i++) {
             address recoveredSigner = ECDSA.recover(reportHash, signatures[i]);
@@ -338,14 +333,10 @@ contract RampImplementation is ProxyStorage, IRamp {
             );
             signers[i] = recoveredSigner;
 
-            if (isOracleNode[recoveredSigner]) {
-                validSignatures++;
-            } else {
+            if (!isOracleNode[recoveredSigner]) {
                 revert InvalidSigner(recoveredSigner);
             }
         }
-
-        return validSignatures >= signatureThreshold;
     }
 
     function _updateOracleNodes(address[] memory newOracleNodes) internal {
