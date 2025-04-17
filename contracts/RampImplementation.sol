@@ -101,6 +101,14 @@ contract RampImplementation is ProxyStorage, IRamp {
         return initialized;
     }
 
+    function getDomainSeparator() external view returns (bytes32) {
+        return _buildDomainSeparator();
+    }
+
+    function getTransmitTypeHash() external view returns (bytes32) {
+        return _buildTransmitTypeHash();
+    }
+
     function isAuthorizedSender(address sender) external view returns (bool) {
         return authorizedSenders[sender];
     }
