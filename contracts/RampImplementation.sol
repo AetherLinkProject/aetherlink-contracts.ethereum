@@ -22,8 +22,8 @@ contract RampImplementation is ProxyStorage, IRamp {
     mapping(uint256 => bool) public authorizedTargetChainIdList;
 
     mapping(bytes32 => bool) private processedReports;
-    bytes32 TRANSMIT_TYPEHASH;
-    bytes32 DOMAIN_SEPARATOR;
+    bytes32 public TRANSMIT_TYPEHASH;
+    bytes32 public DOMAIN_SEPARATOR;
 
     error InvalidSigner(address signer);
 
@@ -99,14 +99,6 @@ contract RampImplementation is ProxyStorage, IRamp {
 
     function getInitialized() external view returns (bool) {
         return initialized;
-    }
-
-    function getDomainSeparator() external view returns (bytes32) {
-        return _buildDomainSeparator();
-    }
-
-    function getTransmitTypeHash() external view returns (bytes32) {
-        return _buildTransmitTypeHash();
     }
 
     function isAuthorizedSender(address sender) external view returns (bool) {
@@ -323,19 +315,15 @@ contract RampImplementation is ProxyStorage, IRamp {
         for (uint256 i = 0; i < signatures.length; i++) {
             address recoveredSigner = ECDSA.recover(reportHash, signatures[i]);
             require(
-                recoveredSigner != address(0),
-                "Invalid signature: zero address"
-            );
-
-            require(
                 !_contains(signers, recoveredSigner),
                 "Non-unique signature"
             );
-            signers[i] = recoveredSigner;
 
             if (!isOracleNode[recoveredSigner]) {
-                revert InvalidSigner(recoveredSigner);
+                revert("invalid signer");
             }
+
+            signers[i] = recoveredSigner;
         }
     }
 
