@@ -1,0 +1,48 @@
+jobs:
+
+  # All tasks on Windows....
+  - job: build_all_windows
+    displayName: Build all tasks (Windows)
+    timeoutInMinutes: 120
+    pool:
+      vmImage: windows-latest
+    steps:
+      - task: Npm@1
+        inputs:
+          command: 'install'
+        displayName: npm install
+      - script: npx hardhat test
+        displayName: 'test'
+
+  # All tasks on Linux
+  - job: build_all_linux
+    displayName: Build all tasks (Linux)
+    timeoutInMinutes: 120
+    pool:
+      vmImage: ubuntu-latest
+    steps:
+      - task: Npm@1
+        inputs:
+          command: 'install'
+        displayName: npm install
+      - script: npx hardhat coverage --solcoverjs .solcover.js
+        displayName: 'test'
+      - script: |
+          curl -Os https://uploader.codecov.io/latest/linux/codecov
+          chmod +x codecov
+          ./codecov -t $CODECOV_TOKEN
+        displayName: 'upload to codecov'
+
+  # All tasks on macOS
+  - job: build_all_darwin
+    displayName: Build all tasks (macOS)
+    timeoutInMinutes: 120
+    pool:
+      vmImage: macos-latest
+    steps:
+      - task: Npm@1
+        inputs:
+          command: 'install'
+        displayName: npm install
+      - script: npx hardhat test
+        displayName: 'test'

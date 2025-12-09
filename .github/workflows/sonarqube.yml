@@ -1,0 +1,55 @@
+name: PR Static Code Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  static-code-analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Code Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18  
+      
+      - name: Install NPM Dependencies
+        run: npm install
+
+      - name: Install Required Tools
+        run: npm install hardhat solidity-coverage prettier-solidity-plugin --save-dev
+      
+      - name: Run Coverage Report
+        run: npx hardhat coverage
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.sonar/cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+      
+      - name: Cache SonarQube scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@v4
+        with:
+          path: ./.sonar/scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+      
+      - name: Install SonarScanner for Node.js
+        run: npm install -g sonarqube-scanner
+
+      - name: Begin SonarQube Analysis
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=aetherLink-contracts.ethereum \
+            -Dsonar.sources=. \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
